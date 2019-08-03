@@ -1,5 +1,5 @@
 // A little Scheme in TypeScript 3.5/Node 12
-//      v0.1 R01.08.01/R01.08.02 by SUZUKI Hisao
+//      v0.1 R01.08.01/R01.08.03 by SUZUKI Hisao
 // $ tsc -strict -t ES6 scm.ts && node scm.js
 
 'use strict';
@@ -37,7 +37,7 @@ class Cell {
     // Length as a list
     get length(): number {
         let i = 0;
-        for (let e of this) i++;
+        for (const e of this) i++;
         return i;
     }
 }
@@ -116,7 +116,7 @@ class Environment {
 
     // Search the bindings for a symbol.
     lookFor(sym: Sym): Environment {
-        for (let env of this)
+        for (const env of this)
             if (env.sym === sym)
                 return env;
         throw ReferenceError(sym.toString());
@@ -189,8 +189,8 @@ class Continuation {
 
     // Return a quasi-stack trace.
     toString(): string {
-        let ss: string[] = [];
-        for (let [op, val] of this.stack)
+        const ss: string[] = [];
+        for (const [op, val] of this.stack)
             ss.push(ContOpNames[op] + ' ' + stringify(val));
         return '$<' + ss.join('\n\t  ') + '>';
     }
@@ -202,7 +202,7 @@ class Continuation {
 
     // Pop a step from the top of the continuation.
     pop(): [ContOp, unknown] {
-        let result = this.stack.pop();
+        const result = this.stack.pop();
         if (result === undefined)
             throw new Error('the continuation is empty.');
         return result;
@@ -272,9 +272,9 @@ function stringify(exp: unknown, quote: boolean = true): string {
     } else if (exp === false) {
         return '#f';
     } else if (exp instanceof Cell) {
-        let ss: string[] = [];
+        const ss: string[] = [];
         try {
-            for (let e of exp)
+            for (const e of exp)
                 ss.push(stringify(e, quote));
         } catch (ex) {
             if (ex instanceof ImproperListException) {
@@ -286,8 +286,8 @@ function stringify(exp: unknown, quote: boolean = true): string {
         }
         return '(' + ss.join(' ') + ')';
     } else if (exp instanceof Environment) {
-        let ss: string[] = [];
-        for (let e of exp)
+        const ss: string[] = [];
+        for (const e of exp)
             if (e === GlobalEnv) {
                 ss.push('GlobalEnv');
                 break;
@@ -322,7 +322,7 @@ function globals(x: List) {
     let j: List = null;
     const env = GlobalEnv.next; // Skip the frame marker.
     if (env !== null)
-        for (let e of env)
+        for (const e of env)
             j = new Cell(e.sym, j);
     return j;
 }
@@ -371,7 +371,7 @@ const GlobalEnv = new Environment(
 
 // Evaluate an expression in an environment.
 function evaluate(exp: unknown, env: Environment): unknown {
-    let k = new Continuation();
+    const k = new Continuation();
     try {
         for (;;) {
             for (;;) {
@@ -412,10 +412,10 @@ function evaluate(exp: unknown, env: Environment): unknown {
             }
             Loop2:
             for (;;) {
-                // write(' _' + k.length);
+                // write('_' + k.length);
                 if (k.length === 0)
                     return exp;
-                let [op, x] = k.pop();
+                const [op, x] = k.pop();
                 switch (op) {
                 case ContOp.Then: { // x is (e2) or (e2 e3).
                     const j = x as Cell;
@@ -467,16 +467,17 @@ function evaluate(exp: unknown, env: Environment): unknown {
                     // x is a list of evaluated args (to be cdr);
                     // exp is a newly evaluated arg (to be car).
                     const args = new Cell(exp, x);
-                    [op, exp] = k.pop();
-                    switch (op) {
-                    case ContOp.EvalArg: // exp is the next arg.
+                    const [op2, exp2] = k.pop();
+                    switch (op2) {
+                    case ContOp.EvalArg: // exp2 is the next arg.
+                        exp = exp2;
                         k.push(ContOp.ConsArgs, args);
                         break Loop2;
-                    case ContOp.ApplyFun: // exp is a function.
-                        [exp, env] = applyFunction(exp, args, k, env);
+                    case ContOp.ApplyFun: // exp2 is a function.
+                        [exp, env] = applyFunction(exp2, args, k, env);
                         break;
                     default:
-                        throw Error('invalid operation: ' + op);
+                        throw Error('invalid operation: ' + op2);
                     }
                     break;
                 case ContOp.RestoreEnv: // x is an Environment.
@@ -541,12 +542,12 @@ function applyFunction(fun: unknown, arg: List, k: Continuation,
 // Split a string into a list of tokens.
 // For '(a 1)' it returns ['(', 'a', '1', ')'].
 function splitStringIntoTokens(source: string): string[] {
-    let result: string[] = [];
-    for (let line of source.split('\n')) {
-        let x: string[] = [];
-        let ss: string[] = [];
+    const result: string[] = [];
+    for (const line of source.split('\n')) {
+        const x: string[] = [];
+        const ss: string[] = [];
         let i = 0;
-        for (let e of line.split('"')) {
+        for (const e of line.split('"')) {
             if (i % 2 === 0) {
                 x.push(e);
             } else {
@@ -557,9 +558,9 @@ function splitStringIntoTokens(source: string): string[] {
         }
         let s = x.join(' ').split(';')[0]; // Ignore ;-comment.
         s = s.replace(/'/g, " ' ").replace(/\)/g, ' ) ').replace(/\(/g, ' ( ');
-        for (let e of s.split(/\s+/))
+        for (const e of s.split(/\s+/))
             if (e === '#s') {
-                let s = ss.shift() as string;
+                const s = ss.shift() as string;
                 result.push(s);
             } else if (e !== '') {
                 result.push(e);
@@ -571,7 +572,7 @@ function splitStringIntoTokens(source: string): string[] {
 // Read an expression from tokens.
 // Tokens will be left with the rest of the token strings, if any.
 function readFromTokens(tokens: string[]): unknown {
-    let token = tokens.shift();
+    const token = tokens.shift();
     switch (token) {
     case undefined:
         throw new EOFException();
@@ -596,7 +597,7 @@ function readFromTokens(tokens: string[]): unknown {
     case ')':
         throw SyntaxError('unexpected )');
     case "'":
-        let e = readFromTokens(tokens);
+        const e = readFromTokens(tokens);
         return new Cell(QuoteSym, new Cell(e, null)); // 'e => (quote e)
     case '#f':
         return false;
@@ -617,10 +618,10 @@ function readFromTokens(tokens: string[]): unknown {
 
 // Load a source code from a file.
 function load(fileName: string): void {
-    let source = readStringFrom(fileName);
-    let tokens: string[] = splitStringIntoTokens(source);
+    const source = readStringFrom(fileName);
+    const tokens = splitStringIntoTokens(source);
     while (tokens.length > 0) {
-        let exp = readFromTokens(tokens);
+        const exp = readFromTokens(tokens);
         evaluate(exp, GlobalEnv);
     }
 }
@@ -680,17 +681,18 @@ if (typeof process !== 'undefined' && typeof require !== 'undefined') {
     const lineBuffer = Buffer.alloc(2000);
     process.stdin.setEncoding('utf8');
 
-    // N.B. This function will work only on Unix.
+    // N.B. This function seems to work both on Unix and on Windows.
     readLine = (prompt: string) => {
         process.stdout.write(prompt);
         const fd = process.stdin.fd;
-        let n = -1;
+        let n = 0;
         for (;;) {
             try {
                 n = fs.readSync(fd, lineBuffer, 0, 2000);
             } catch (ex) {
                 if (ex.code == 'EAGAIN')
                     continue;
+                throw ex;
             }
             break;
         }
@@ -709,6 +711,7 @@ if (typeof process !== 'undefined' && typeof require !== 'undefined') {
         }
         readEvalPrintLoop();
     } catch (ex) {
-        write(ex.stack + "\n");
+        console.log(ex);
+        process.exit(1);
     }
 }

@@ -43,9 +43,6 @@ Press EOF (e.g. Control-D) to exit the session.
 $ 
 ```
 
-_N.B.  This read-eval-print loop will work only on Unix._
-See [`readLine`](scm.ts#L684-699) function in `scm.ts` for details.
-
 
 You can run it with a Scheme script.
 Examples are found in 
@@ -167,7 +164,7 @@ See [`GlobalEnv`](scm.ts#L330-L368)
 in `scm.ts` for the implementation of the procedures
 except `call/cc` and `apply`.  
 `call/cc` and `apply` are implemented particularly at 
-[`ApplyFunction`](scm.ts#L503-L537) in `scm.ts`.
+[`ApplyFunction`](scm.ts#L504-L538) in `scm.ts`.
 
 I hope this serves as a handy model of how to write a Scheme interpreter
 in TypeScript/JavaScript.
