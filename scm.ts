@@ -155,19 +155,6 @@ enum ContOp {
     RestoreEnv
 }
 
-// Operation names in continuations
-const ContOpNames = [
-    "Then",
-    "Begin",
-    "Define",
-    "SetQ",
-    "Apply",
-    "ApplyFun",
-    "EvalArg",
-    "ConsArgs",
-    "RestoreEnv"
-];
-
 // Scheme's continuation as a stack of steps
 class Continuation {
     private stack: Array<[ContOp, unknown]>;
@@ -191,7 +178,7 @@ class Continuation {
     toString(): string {
         const ss: string[] = [];
         for (const [op, val] of this.stack)
-            ss.push(ContOpNames[op] + ' ' + stringify(val));
+            ss.push(ContOp[op] + ' ' + stringify(val));
         return '$<' + ss.join('\n\t  ') + '>';
     }
 
