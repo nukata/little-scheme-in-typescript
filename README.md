@@ -1,11 +1,10 @@
 # A Little Scheme in TypeScript
 
 This is a small interpreter of a subset of Scheme
-in circa 700 lines of _TypeScript 3.5/Node.js 12_.
-It implements _almost_ the same language as
+in circa 800 lines of _TypeScript 3.5/Node.js 12_.
+It implements the same language as
 
 - [little-scheme-in-cs](https://github.com/nukata/little-scheme-in-cs)
-- [little-scheme-in-dart](https://github.com/nukata/little-scheme-in-dart)
 - [little-scheme-in-go](https://github.com/nukata/little-scheme-in-go)
 - [little-scheme-in-java](https://github.com/nukata/little-scheme-in-java)
 - [little-scheme-in-python](https://github.com/nukata/little-scheme-in-python)
@@ -21,7 +20,7 @@ it optimizes _tail calls_ and handles _first-class continuations_ properly.
 ## How to run
 
 ```
-$ tsc -strict -t ES6 scm.ts
+$ tsc -strict -t ESNext --outFile scm.js scm.ts
 $ node scm.js
 > (+ 5 6)
 11
@@ -86,21 +85,18 @@ list not null? pair? eqv? eq? cons cdr car fibonacci)
 > (fibonacci 16)
 987
 > (fibonacci 1000)
-4.346655768693743e+208
+43466557686937456435688527675040625802564660517371780402481729089536555417949051
+89040387984007925516929592259308032263477520968962323987332247116164299644090653
+3187938298969649928516003704476137795166849228875
 > 
 ```
-
-Note the inexact result of `(fibonacci 10000)`, which was calculated with
-`number`s of JavaScript.
-I am considering using [`BigInt`](https://github.com/tc39/proposal-bigint)s.
-
 
 
 ## The implemented language
 
 | Scheme Expression                   | Internal Representation             |
 |:------------------------------------|:------------------------------------|
-| numbers `1`, `2.3`                  | `number`                            |
+| numbers `1`, `2.3`                  | `bigint` or `number`                |
 | `#t`                                | `true`                              |
 | `#f`                                | `false`                             |
 | strings `"hello, world"`            | `string`                            |
@@ -111,6 +107,11 @@ I am considering using [`BigInt`](https://github.com/tc39/proposal-bigint)s.
 | built-in procedures `car`, `cdr`    | `class Intrinsic`                   |
 | continuations                       | `class Continuation`                |
 
+- Integers are represented by
+  [`bigint`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt),
+  which is supported by
+  [TypeScipt 3.2](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-3-2.html)
+  and later,  Node.js 10.4 and later, Firefox 68 and later etc.
 
 The implementation is similar to those of
 [little-scheme-in-dart](https://github.com/nukata/little-scheme-in-dart) and
@@ -160,11 +161,11 @@ For simplicity, this Scheme treats (`define` _v_ _e_) as an expression type.
 - `(globals)` returns a list of keys of the global environment.
   It is not in the standard.
 
-See [`GlobalEnv`](scm.ts#L317-L355)
+See [`GlobalEnv`](scm.ts#L316-L363)
 in `scm.ts` for the implementation of the procedures
 except `call/cc` and `apply`.  
 `call/cc` and `apply` are implemented particularly at 
-[`ApplyFunction`](scm.ts#L491-L525) in `scm.ts`.
+[`ApplyFunction`](scm.ts#L499-L533) in `scm.ts`.
 
 I hope this serves as a handy model of how to write a Scheme interpreter
 in TypeScript/JavaScript.

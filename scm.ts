@@ -1,8 +1,8 @@
 // A little Scheme in TypeScript 3.5/Node 12
-//      v0.1 R01.08.01/R01.08.03 by SUZUKI Hisao
-// $ tsc -strict -t ES6 scm.ts && node scm.js
+//  v0.3 R01.08.01/R01.08.04 by SUZUKI Hisao
+// $ tsc -strict -t ESNext --outFile scm.js scm.ts && node scm.js
 
-'use strict';
+/// <reference path="arith.ts" />
 
 // readStringFrom must read the whole file of fileName as a string.
 let readStringFrom: (fileName: string) => string;
@@ -138,7 +138,6 @@ class Environment {
         }
     }
 }
-
 
 //----------------------------------------------------------------------
 
@@ -315,11 +314,11 @@ function globals(x: List) {
 }
  
 let G1 =
-    c('+', 2, x => (fst(x) as number) + (snd(x) as number), // XXX
-      c('-', 2, x => (fst(x) as number) - (snd(x) as number),
-        c('*', 2, x => (fst(x) as number) * (snd(x) as number),
-          c('<', 2, x => (fst(x) as number) < (snd(x) as number),
-            c('=', 2, x => (fst(x) as number) === (snd(x) as number),
+    c('+', 2, x => add(fst(x) as Numeric, snd(x) as Numeric),
+      c('-', 2, x => subtract(fst(x) as Numeric, snd(x) as Numeric),
+        c('*', 2, x => multiply(fst(x) as Numeric, snd(x) as Numeric),
+          c('<', 2, x => compare(fst(x) as Numeric, snd(x) as Numeric) < 0,
+            c('=', 2, x => compare(fst(x) as Numeric, snd(x) as Numeric) === 0,
               c('error', 2, x => {
                   throw new ErrorException(fst(x), snd(x));
               },
@@ -336,7 +335,16 @@ const GlobalEnv = new Environment(
       c('cdr', 1, x => (fst(x) as Cell).cdr,
         c('cons', 2, x => new Cell(fst(x), snd(x)),
           c('eq?', 2, x => Object.is(fst(x), snd(x)),
-            c('eqv?', 2, x => fst(x) === snd(x), // XXX
+            c('eqv?', 2, x => {
+                const a = fst(x);
+                const b = snd(x);
+                if (a === b) return true;
+                try {
+                    return compare(a as Numeric, b as Numeric) === 0;
+                } catch (ex) {
+                    return false;
+                }
+            },
               c('pair?', 1, x => fst(x) instanceof Cell,
                 c('null?', 1, x => fst(x) === null,
                   c('not', 1, x => fst(x) === false,
@@ -594,10 +602,10 @@ function readFromTokens(tokens: string[]): unknown {
     if (token[0] === '"') {
         return token.substring(1);
     } else {
-        const n = Number(token); // XXX
-        if (! isNaN(n))
-            return n;
-        return Sym.interned(token);
+        const n = tryToParse(token);
+        if (n === null)
+            return Sym.interned(token);
+        return n;
     }
 }
 
