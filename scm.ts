@@ -1,21 +1,22 @@
-// A little Scheme in TypeScript 3.5/Node 12
-//  v0.3 R01.08.01/R01.08.04 by SUZUKI Hisao
+// A little Scheme in TypeScript 3.5/Node.js 12
+//     v0.4 R01.08.01/R01.08.11 by SUZUKI Hisao
 // $ tsc -strict -t ESNext --outFile scm.js scm.ts && node scm.js
 
 /// <reference path="arith.ts" />
 
-// readStringFrom must read the whole file of fileName as a string.
+// Run the callback on the next event loop.
+let runOnNextLoop: (callback: () => void) => void;
+
+// Read the whole file of fileName as a string.
 let readStringFrom: (fileName: string) => string;
 
-// readLine must write the prompt and read a line from the console.
-// It must return the line, or null on EOF.
-let readLine: (prompt: string) => string;
-
-// write must write the strig s (a new line on '\n').
+// Write the strig s (a new line on '\n').
 let write: (s: string) => void;
 
-// eixt must terminate the process with the exit code n.
+// Terminate the process with the exit code n.
 let exit: (n: number) => void;
+
+// Set stdInOnData and stdInOnEnd as the callbacks of the standard-in.
 
 //----------------------------------------------------------------------
 
@@ -31,7 +32,8 @@ class Cell {
             yield j.car;
             j = j.cdr;
         }
-        if (j !== null) throw new ImproperListException(j);
+        if (j !== null)
+            throw new ImproperListException(j);
     }
 
     // Length as a list
@@ -351,11 +353,15 @@ const GlobalEnv = new Environment(
                     c('list', -1, x => x,
                       c('display', 1, x => {
                           write(stringify(fst(x), false));
-                          return None;
+                          return new Promise(resolve => {
+                              runOnNextLoop(() => resolve(None));
+                          });
                       },
                         c('newline', 0, x => {
                             write('\n');
-                            return None;
+                            return new Promise(resolve => {
+                                runOnNextLoop(() => resolve(None));
+                            });
                         },
                           c('read', 0, x => readExpression('', ''),
                             c('eof-object?', 1, x => fst(x) === EOF,
@@ -364,171 +370,210 @@ const GlobalEnv = new Environment(
 
 //----------------------------------------------------------------------
 
-// Evaluate an expression in an environment.
-function evaluate(exp: unknown, env: Environment): unknown {
-    const k = new Continuation();
-    try {
-        for (;;) {
-            for (;;) {
-                if (exp instanceof Cell) {
-                    const kar = exp.car;
-                    const kdr = exp.cdr as Cell;
-                    if (kar === QuoteSym) { // (quote e)
-                        exp = kdr.car;
-                        break;
-                    } else if (kar === IfSym) { // (if e1 e2 e3) or (if e1 e2)
-                        exp = kdr.car;
-                        k.push(ContOp.Then, kdr.cdr);
-                    } else if (kar ===  BeginSym) { // (begin e...)
-                        exp = kdr.car;
-                        if (kdr.cdr !== null)
-                            k.push(ContOp.Begin, kdr.cdr);
-                    } else if (kar === LambdaSym) { // (lambda (v...) e...)
-                        exp = new Closure(kdr.car as Cell,
-                                          kdr.cdr as Cell, env);
-                        break;
-                    } else if (kar === DefineSym) { // (define v e)
-                        exp = snd(kdr);
-                        k.push(ContOp.Define, kdr.car);
-                    } else if (kar === SetQSym) { // (set! v e)
-                        exp = snd(kdr);
-                        const v = kdr.car as Sym;
-                        k.push(ContOp.SetQ, env.lookFor(v));
-                    } else { // (fun arg...)
-                        exp = kar;
-                        k.push(ContOp.Apply, kdr);
-                    }
-                } else if (exp instanceof Sym) {
-                    exp = env.lookFor(exp).val;
-                    break;
-                } else {
-                    break;      // a number, #t, #f etc.
-                }
-            }
-            Loop2:
-            for (;;) {
-                // write('_' + k.length);
-                if (k.length === 0)
-                    return exp;
-                const [op, x] = k.pop();
-                switch (op) {
-                case ContOp.Then: { // x is (e2) or (e2 e3).
-                    const j = x as Cell;
-                    if (exp === false) {
-                        if (j.cdr === null) {
-                            exp = None;
-                            break;
-                        } else {
-                            exp = snd(j); // e3
-                            break Loop2;
-                        }
-                    } else {
-                        exp = j.car; // e2
-                        break Loop2;
-                    }
-                }
-                case ContOp.Begin: { // x is (e...).
-                    const j = x as Cell;
-                    if (j.cdr !== null) // Unless on a tail call...
-                        k.push(ContOp.Begin, j.cdr);
-                    exp = j.car;
-                    break Loop2;
-                }
-                case ContOp.Define: // x is a variable name.
-                    //if (env.sym !== null) throw Error('no frame marker');
-                    env.next = new Environment(x as Sym, exp, env.next);
-                    exp = None;
-                    break;
-                case ContOp.SetQ: // x is an Environment.
-                    (x as Environment).val = exp;
-                    exp = None;
-                    break;
-                case ContOp.Apply: // x is a list of args; exp is a function.
-                    if (x === null) {
-                        [exp, env] = applyFunction(exp, null, k, env);
-                        break;
-                    } else {
-                        k.push(ContOp.ApplyFun, exp);
-                        let j = x as Cell;
-                        while (j.cdr !== null) {
-                            k.push(ContOp.EvalArg, j.car);
-                            j = j.cdr as Cell;
-                        }
-                        exp = j.car;
-                        k.push(ContOp.ConsArgs, null);
-                        break Loop2;
-                    }
-                case ContOp.ConsArgs:
-                    // x is a list of evaluated args (to be cdr);
-                    // exp is a newly evaluated arg (to be car).
-                    const args = new Cell(exp, x);
-                    const [op2, exp2] = k.pop();
-                    switch (op2) {
-                    case ContOp.EvalArg: // exp2 is the next arg.
-                        exp = exp2;
-                        k.push(ContOp.ConsArgs, args);
-                        break Loop2;
-                    case ContOp.ApplyFun: // exp2 is a function.
-                        [exp, env] = applyFunction(exp2, args, k, env);
-                        break;
-                    default:
-                        throw Error('invalid operation: ' + op2);
-                    }
-                    break;
-                case ContOp.RestoreEnv: // x is an Environment.
-                    env = x as Environment;
-                    break;
-                default:
-                    throw Error('invalid operation: ' + op);
-                }
-            }
-        }
-   } catch (ex) {
-       if (ex instanceof ErrorException)
-           throw ex;
-       else if (k.length == 0)
-           throw ex;
-       const ex2 = new Error(ex + '\n\t' + stringify(k));
-       const stack = ex['stack']; // non-standard
-       if (stack !== undefined)
-           ex2.stack = ex2.message + stack;
-       throw ex2;
-   }
+// Evaluate an expression in an environment asynchronously.
+async function evaluate(exp: unknown, env: Environment): Promise<unknown> {
+    const evl = new Evaluator(env);
+    let intrinsic;
+    [intrinsic, exp] = evl.evaluate1(exp);
+    while (intrinsic !== null) {
+        exp = await intrinsic.fun(exp as Cell);
+        [intrinsic, exp] = evl.continue1(exp);
+    }
+    return exp;
 }
 
-// Apply a function to arguments with a continuation.
-function applyFunction(fun: unknown, arg: List, k: Continuation,
-                       env: Environment): [unknown, Environment]
-{
-    for (;;)
-        if (fun === CallCCSym) {
-            k.pushRestoreEnv(env);
-            fun = fst(arg);
-            arg = new Cell(new Continuation(k), null);
-        } else if (fun === ApplySym) {
-            fun = fst(arg);
-            arg = snd(arg) as List;
-        } else {
-            break;
+// Stepwise expression evaluator
+class Evaluator {
+    private env: Environment;
+    private k: Continuation;
+
+    constructor(env: Environment) {
+        this.env = env;
+        this.k = new Continuation();
+    }
+
+    private fetchFirst(exp: unknown): unknown {
+        for (;;) {
+            if (exp instanceof Cell) {
+                const kar = exp.car;
+                const kdr = exp.cdr as Cell;
+                if (kar === QuoteSym) { // (quote e)
+                    return kdr.car;
+                } else if (kar === IfSym) { // (if e1 e2 e3) or (if e1 e2)
+                    exp = kdr.car;
+                    this.k.push(ContOp.Then, kdr.cdr);
+                } else if (kar ===  BeginSym) { // (begin e...)
+                    exp = kdr.car;
+                    if (kdr.cdr !== null)
+                        this.k.push(ContOp.Begin, kdr.cdr);
+                } else if (kar === LambdaSym) { // (lambda (v...) e...)
+                    return new Closure(kdr.car as Cell,
+                                       kdr.cdr as Cell, this.env);
+                } else if (kar === DefineSym) { // (define v e)
+                    exp = snd(kdr);
+                    this.k.push(ContOp.Define, kdr.car);
+                } else if (kar === SetQSym) { // (set! v e)
+                    exp = snd(kdr);
+                    const v = kdr.car as Sym;
+                    this.k.push(ContOp.SetQ, this.env.lookFor(v));
+                } else {        // (fun arg...)
+                    exp = kar;
+                    this.k.push(ContOp.Apply, kdr);
+                }
+            } else if (exp instanceof Sym) {
+                return this.env.lookFor(exp).val;
+            } else {
+                return exp;     // a number, #t, #f etc.
+            }
         }
-    if (fun instanceof Intrinsic) {
-        if (fun.arity >= 0)
-            if (arg == null ? fun.arity > 0 : arg.length != fun.arity)
-                throw Error('arity not matched: ' + fun + ' and ' +
-                            stringify(arg));
-        return [fun.fun(arg), env];
-    } else if (fun instanceof Closure) {
-        k.pushRestoreEnv(env);
-        k.push(ContOp.Begin, fun.body);
-        return [None, new Environment(null, // frame marker
-                                      null,
-                                      fun.env.prependDefs(fun.params, arg))];
-    } else if (fun instanceof Continuation) {
-        k.copyFrom(fun);
-        return [fst(arg), env];
-    } else {
-        throw Error('not a function: ' + stringify(fun) + ' with ' +
-                    stringify(arg));
+    }
+
+    // Evaluate an expression until the next intrinsic call.
+    evaluate1(exp: unknown): [Intrinsic | null, unknown] {
+        exp = this.fetchFirst(exp);
+        return this.continue1(exp);
+    }
+
+    // Continue the evaluation with a result of the intrinsic call.
+    continue1(exp: unknown): [Intrinsic | null, unknown] {
+        try {
+            for (;;) {
+                Loop2:
+                for (;;) {
+                    // write('_' + this.k.length);
+                    if (this.k.length === 0)
+                        return [null, exp]; // exp is the evaluated result.
+                    const [op, x] = this.k.pop();
+                    switch (op) {
+                    case ContOp.Then: { // x is (e2) or (e2 e3).
+                        const j = x as Cell;
+                        if (exp === false) {
+                            if (j.cdr === null) {
+                                exp = None;
+                                break;
+                            } else {
+                                exp = snd(j); // e3
+                                break Loop2;
+                            }
+                        } else {
+                            exp = j.car; // e2
+                            break Loop2;
+                        }
+                    }
+                    case ContOp.Begin: { // x is (e...).
+                        const j = x as Cell;
+                        if (j.cdr !== null) // Unless on a tail call...
+                            this.k.push(ContOp.Begin, j.cdr);
+                        exp = j.car;
+                        break Loop2;
+                    }
+                    case ContOp.Define: // x is a variable name.
+                        //if (this.env.sym !== null)
+                        //    throw Error('no frame marker');
+                        this.env.next = new Environment(x as Sym, exp,
+                                                        this.env.next);
+                        exp = None;
+                        break;
+                    case ContOp.SetQ: // x is an Environment.
+                        (x as Environment).val = exp;
+                        exp = None;
+                        break;
+                    case ContOp.Apply:
+                        // x is a list of args; exp is a function.
+                        if (x === null) {
+                            let intrinsic;
+                            [intrinsic, exp] = this.applyFunction(exp, null);
+                            if (intrinsic !== null)
+                                return [intrinsic, exp];
+                            break;
+                        } else {
+                            this.k.push(ContOp.ApplyFun, exp);
+                            let j = x as Cell;
+                            while (j.cdr !== null) {
+                                this.k.push(ContOp.EvalArg, j.car);
+                                j = j.cdr as Cell;
+                            }
+                            exp = j.car;
+                            this.k.push(ContOp.ConsArgs, null);
+                            break Loop2;
+                        }
+                    case ContOp.ConsArgs:
+                        // x is a list of evaluated args (to be cdr);
+                        // exp is a newly evaluated arg (to be car).
+                        const args = new Cell(exp, x);
+                        const [op2, exp2] = this.k.pop();
+                        switch (op2) {
+                        case ContOp.EvalArg: // exp2 is the next arg.
+                            exp = exp2;
+                            this.k.push(ContOp.ConsArgs, args);
+                            break Loop2;
+                        case ContOp.ApplyFun: // exp2 is a function.
+                            let intrinsic;
+                            [intrinsic, exp] = this.applyFunction(exp2, args);
+                            if (intrinsic !== null)
+                                return [intrinsic, exp];
+                            break;
+                        default:
+                            throw Error('invalid operation: ' + op2);
+                        }
+                        break;
+                    case ContOp.RestoreEnv: // x is an Environment.
+                        this.env = x as Environment;
+                        break;
+                    default:
+                        throw Error('invalid operation: ' + op);
+                    }
+                } // end Loop2
+                exp = this.fetchFirst(exp);
+            }
+        } catch (ex) {
+            if (ex instanceof ErrorException)
+                throw ex;
+            else if (this.k.length == 0)
+                throw ex;
+            const ex2 = new Error(ex + '\n\t' + stringify(this.k));
+            if (typeof ex === 'object' && ex !== null) {
+                const stack = ex.stack; // non-standard
+                if (stack !== undefined)
+                    ex2.stack = ex2.message + stack;
+            }
+            throw ex2;
+        }
+    }
+
+    // Apply a function to arguments.
+    applyFunction(fun: unknown, arg: List): [Intrinsic | null, unknown] {
+        for (;;)
+            if (fun === CallCCSym) {
+                this.k.pushRestoreEnv(this.env);
+                fun = fst(arg);
+                arg = new Cell(new Continuation(this.k), null);
+            } else if (fun === ApplySym) {
+                fun = fst(arg);
+                arg = snd(arg) as List;
+            } else {
+                break;
+            }
+        if (fun instanceof Intrinsic) {
+            if (fun.arity >= 0)
+                if (arg === null ? fun.arity > 0 : arg.length !== fun.arity)
+                    throw Error('arity not matched: ' + fun + ' and ' +
+                                stringify(arg));
+            return [fun, arg];
+        } else if (fun instanceof Closure) {
+            this.k.pushRestoreEnv(this.env);
+            this.k.push(ContOp.Begin, fun.body);
+            this.env = new Environment(null, // frame marker
+                                       null,
+                                       fun.env.prependDefs(fun.params, arg));
+            return [null, None];
+        } else if (fun instanceof Continuation) {
+            this.k.copyFrom(fun);
+            return [null, fst(arg)];
+        } else {
+            throw Error('not a function: ' + stringify(fun) + ' with ' +
+                        stringify(arg));
+        }
     }
 }
 
@@ -611,50 +656,84 @@ function readFromTokens(tokens: string[]): unknown {
 
 //----------------------------------------------------------------------
 
-// Load a source code from a file.
-function load(fileName: string): void {
+// Load a source code from a file asynchronously.
+async function load(fileName: string): Promise<unknown> {
     const source = readStringFrom(fileName);
     const tokens = splitStringIntoTokens(source);
+    let result: unknown = None;
     while (tokens.length > 0) {
         const exp = readFromTokens(tokens);
-        evaluate(exp, GlobalEnv);
+        result = await evaluate(exp, GlobalEnv);
+    }
+    return result;        // Return the result of the last expression.
+}
+
+let stdInTokens: string[] = []; // Tokens from the standard-in
+let oldTokens: string[] = [];
+type ReadState = [(a: any)=>void, (a: any)=>void, string, string];
+let readState: ReadState | undefined = undefined;
+
+// Read an expression from the standard-in asynchronously.
+function readExpression(prompt1: string, prompt2: string): unknown {
+    oldTokens = stdInTokens.slice();
+    try {
+        return readFromTokens(stdInTokens);
+    } catch (ex) {
+        if (ex instanceof EOFException) {
+            if (readState !== undefined)
+                throw Error('bad read state');
+            write(oldTokens.length === 0 ? prompt1 : prompt2);
+            return new Promise((resolve, reject) => {
+                readState = [resolve, reject, prompt1, prompt2];
+                // Continue into stdInOnData/stdInOnEnd.
+            });
+        } else {
+            stdInTokens = []; // Discard the erroneous tokens.
+            throw ex;
+        }
     }
 }
 
-// Tokens from the standard-in.
-let stdInTokens: string[] = [];
-
-// Read an expression from the standard-in.
-function readExpression(prompt1: string, prompt2: string): unknown {
-    for (;;) {
-        const old = stdInTokens.slice();
+function stdInOnData(line: string): void {
+    const tokens = splitStringIntoTokens(line);
+    stdInTokens = oldTokens.concat(tokens);
+    oldTokens = stdInTokens.slice();
+    if (readState !== undefined) {
+        const [resolve, reject, prompt1, prompt2] = readState;
         try {
-            return readFromTokens(stdInTokens);
+            resolve(readFromTokens(stdInTokens));
+            readState = undefined;
         } catch (ex) {
             if (ex instanceof EOFException) {
-                const line = readLine(old.length == 0 ? prompt1 : prompt2);
-                if (line == null)
-                    return EOF;
-                const tokens = splitStringIntoTokens(line);
-                stdInTokens = old.concat(tokens);
+                write(oldTokens.length === 0 ? prompt1 : prompt2);
+                // Continue into stdInOnData/stdInOnEnd.
             } else {
                 stdInTokens = []; // Discard the erroneous tokens.
-                throw ex;
+                reject(ex);
+                readState = undefined;
             }
         }
     }
 }
 
-// Repeat Read-Eval-Print until End-Of-File.
-function readEvalPrintLoop(): void {
+function stdInOnEnd(): void {
+    if (readState !== undefined) {
+        const [resolve, reject, prompt1, prompt2] = readState;
+        resolve(EOF);
+        readState = undefined;
+    }
+}
+
+// Repeat Read-Eval-Print until End-Of-File asynchronously.
+async function readEvalPrintLoop(): Promise<void> {
     for (;;)
         try {
-            const exp = readExpression('> ', '| ');
+            const exp = await readExpression('> ', '| ');
             if (exp === EOF) {
                 write("Goodbye\n");
                 return;
             }
-            const result = evaluate(exp, GlobalEnv);
+            const result = await evaluate(exp, GlobalEnv);
             if (result != None)
                 write(stringify(result) + '\n');
         } catch (ex) {
@@ -667,46 +746,36 @@ function readEvalPrintLoop(): void {
 // The main procedure etc. on Node.js 
 
 declare var process: any;
-declare var Buffer: any;
+declare function setImmediate(callback: () => void): void;
 declare function require(name: string): any;
+
 if (typeof process !== 'undefined' && typeof require !== 'undefined') {
+    runOnNextLoop = setImmediate;
+    // runOnNextLoop = setTimeout;
+
     const fs = require('fs');
     readStringFrom = (fileName: string) => fs.readFileSync(fileName, 'utf8');
-
-    const lineBuffer = Buffer.alloc(2000);
-    process.stdin.setEncoding('utf8');
-
-    // N.B. This function seems to work both on Unix and on Windows.
-    readLine = (prompt: string) => {
-        process.stdout.write(prompt);
-        const fd = process.stdin.fd;
-        let n = 0;
-        for (;;) {
-            try {
-                n = fs.readSync(fd, lineBuffer, 0, 2000);
-            } catch (ex) {
-                if (ex.code == 'EAGAIN')
-                    continue;
-                throw ex;
-            }
-            break;
-        }
-        if (n == 0) return null;
-        return lineBuffer.toString('utf8', 0, n);
-    }
 
     write = (s: string) => process.stdout.write(s);
     exit = process.exit;
 
-    try {
-        if (process.argv.length > 2) {
-            load(process.argv[2]);
-            if (process.argv[3] !== '-')
-                process.exit(0);
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', stdInOnData);
+    process.stdin.on('end', stdInOnEnd);
+
+    async function main() {
+        try {
+            if (process.argv.length > 2) {
+                await load(process.argv[2]);
+                if (process.argv[3] !== '-')
+                    process.exit(0);
+            }
+            await readEvalPrintLoop();
+        } catch (ex) {
+            console.log(ex);
+            process.exit(1);
         }
-        readEvalPrintLoop();
-    } catch (ex) {
-        console.log(ex);
-        process.exit(1);
     }
+
+    main();
 }

@@ -1,7 +1,7 @@
 # A Little Scheme in TypeScript
 
 This is a small interpreter of a subset of Scheme
-in circa 800 lines of _TypeScript 3.5/Node.js 12_.
+in circa 900 lines of _TypeScript 3.5/Node.js 12_.
 It implements the same language as
 
 - [little-scheme-in-cs](https://github.com/nukata/little-scheme-in-cs)
@@ -12,6 +12,11 @@ It implements the same language as
 
 and their meta-circular interpreter, 
 [little-scheme](https://github.com/nukata/little-scheme).
+
+You can run it also on web browsers by giving the definitions to
+`runOnNextLoop`, `readStringFrom`, `write` and `exit` and by setting
+`stdInOnData` and `stdInOnEnd` as the callbacks of an asynchronous input.
+See the [head](scm.ts#L7-L19) and the [tail](scm.ts#L748-L781) of `scm.ts`.
 
 As a Scheme implementation, 
 it optimizes _tail calls_ and handles _first-class continuations_ properly.
@@ -112,6 +117,9 @@ list not null? pair? eqv? eq? cons cdr car fibonacci)
   which is supported by
   [TypeScipt 3.2](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-3-2.html)
   and later,  Node.js 10.4 and later, Firefox 68 and later etc.
+  On the platforms that do not support `bigint` (e.g. Safari 12.1), integers
+  will be represented by `number` automatically.
+  See [`tryToParse`](arith.ts#L73-L83) in `arith.ts`.
 
 The implementation is similar to those of
 [little-scheme-in-dart](https://github.com/nukata/little-scheme-in-dart) and
@@ -161,11 +169,11 @@ For simplicity, this Scheme treats (`define` _v_ _e_) as an expression type.
 - `(globals)` returns a list of keys of the global environment.
   It is not in the standard.
 
-See [`GlobalEnv`](scm.ts#L316-L363)
+See [`GlobalEnv`](scm.ts#L318-L369)
 in `scm.ts` for the implementation of the procedures
 except `call/cc` and `apply`.  
 `call/cc` and `apply` are implemented particularly at 
-[`ApplyFunction`](scm.ts#L499-L533) in `scm.ts`.
+[`applyFunction`](scm.ts#L544-L577) in `scm.ts`.
 
 I hope this serves as a handy model of how to write a Scheme interpreter
 in TypeScript/JavaScript.
