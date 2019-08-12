@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Little Scheme in TypeScript on Browser</title>
+    <style type="text/css">
+      body { background: #F2F4F8; margin: 2em }
+    </style>
+    <script type="text/javascript" src="scm.js"></script>
+  </head>
+  <body>
+    <h2>Little Scheme in TypeScript on Browser</h2>
+
+    <label>
+      <p>
+        Type a Scheme expression and press Enter key
+        to evaluate the expresssion.
+      </p>
+      <textarea id="text_area" rows="20" cols="80"></textarea>
+      <p>
+        <button onclick="clear_screen()">Clear Screen</button>
+        <button onclick="stop_flag=true">Stop at Writing</button>
+      </p>
+    </label>
+
+    <p>
+      Edit Scheme expressions and click
+      <button onclick="load_code()">Load</button>
+      button to load them to the interpreter.
+    </p>
+<textarea id="code_area" rows="20" cols="80">
+;; The yin-yang puzzle 
+;; cf. https://en.wikipedia.org/wiki/Call-with-current-continuation
+
+((lambda (yin)
+   ((lambda (yang)
+      (yin yang))
+    ((lambda (cc)
+       (display '*)
+       cc)
+     (call/cc (lambda (c) c)))))
+ ((lambda (cc)
+    (newline)
+    cc)
+  (call/cc (lambda (c) c))))
+
+;; => \n*\n**\n***\n****\n*****\n******\n...
+</textarea>
+    </label>
+
+    <p>
+      For details, see
+      <a href="https://github.com/nukata/little-scheme-in-typescript"
+         >https://github.com/nukata/little-scheme-in-typescript</a>.
+    </p>
+
+<script type="text/javascript">
+  const ta = document.getElementById("text_area");
+  let current_position = 0;
+  let stop_flag = false;
+
+  write = (s) => {
+      if (stop_flag) {
+          stop_flag = false;
+          throw new ErrorException("Stopped at writing", s);
+      }
+      ta.value += s;
+      current_position = ta.value.length;
+  }
+
+  ta.addEventListener("keyup", (event) => {
+      if (event.key === "Enter") {
+          line = ta.value.substring(current_position);
+          stdInOnData(line);
+      }
+  });
+
+  function clear_screen() {
+      ta.value = "";
+      current_position = 0;
+  }
+
+  const ca = document.getElementById("code_area");
+  readStringFrom = (fileName) => ca.value;
+
+  async function load_code() {
+      try {
+          let result = await load("");
+          if (result !== None)
+              write("\n" + stringify(result));
+      } catch (ex) {
+          write(ex);
+      }
+      write("\n");
+  }
+
+  readEvalPrintLoop();
+</script>
+  </body>
+</html>

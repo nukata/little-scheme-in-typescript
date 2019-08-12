@@ -13,10 +13,13 @@ It implements the same language as
 and their meta-circular interpreter, 
 [little-scheme](https://github.com/nukata/little-scheme).
 
-You can run it also on web browsers by giving the definitions to
-`runOnNextLoop`, `readStringFrom`, `write` and `exit` and by setting
-`stdInOnData` and `stdInOnEnd` as the callbacks of an asynchronous input.
-See the [head](scm.ts#L7-L19) and the [tail](scm.ts#L748-L781) of `scm.ts`.
+You can run it on Web browsers by giving appropriate values to
+`readStringFrom` and `write` and by setting
+`stdInOnData` (and `stdInOnEnd`) as the callback(s) of an asynchronous input.
+See the [head](scm.ts#L12-L18) and [tail](scm.ts#L751-L777) of `scm.ts`
+for these variables and function(s).
+See [`example/index.html`](example/index.html) for a simple example.
+
 
 As a Scheme implementation, 
 it optimizes _tail calls_ and handles _first-class continuations_ properly.
@@ -47,8 +50,23 @@ Press EOF (e.g. Control-D) to exit the session.
 $ 
 ```
 
+If you do not have `tsc` (TypeScript Compiler), use `example/scm.js`.
 
-You can run it with a Scheme script.
+```
+$ node example/scm.js
+> (+ 7.8 9)
+16.8
+> 
+```
+
+If you have a modern browser, open `example/index.html` with it.
+
+```
+$ open example/index.html
+```
+
+
+You can run `node scm.js` with a Scheme script.
 Examples are found in 
 [little-scheme](https://github.com/nukata/little-scheme);
 download it at `..` and you can try the following:
@@ -118,7 +136,7 @@ list not null? pair? eqv? eq? cons cdr car fibonacci)
   [TypeScipt 3.2](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-3-2.html)
   and later,  Node.js 10.4 and later, Firefox 68 and later etc.
   On the platforms that do not support `bigint` (e.g. Safari 12.1), integers
-  will be represented by `number` automatically.
+  are represented by `number` automatically.
   See [`tryToParse`](arith.ts#L73-L83) in `arith.ts`.
 
 The implementation is similar to those of
@@ -169,11 +187,11 @@ For simplicity, this Scheme treats (`define` _v_ _e_) as an expression type.
 - `(globals)` returns a list of keys of the global environment.
   It is not in the standard.
 
-See [`GlobalEnv`](scm.ts#L318-L369)
+See [`GlobalEnv`](scm.ts#L317-L368)
 in `scm.ts` for the implementation of the procedures
 except `call/cc` and `apply`.  
 `call/cc` and `apply` are implemented particularly at 
-[`applyFunction`](scm.ts#L544-L577) in `scm.ts`.
+[`applyFunction`](scm.ts#L543-L576) in `scm.ts`.
 
 I hope this serves as a handy model of how to write a Scheme interpreter
 in TypeScript/JavaScript.
