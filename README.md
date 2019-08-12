@@ -13,13 +13,13 @@ It implements the same language as
 and their meta-circular interpreter, 
 [little-scheme](https://github.com/nukata/little-scheme).
 
-You can run it on Web browsers by giving appropriate values to
+You can run it on web browsers by giving appropriate values to
 `readStringFrom` and `write` and by setting
 `stdInOnData` (and `stdInOnEnd`) as the callback(s) of an asynchronous input.
 See the [head](scm.ts#L12-L18) and [tail](scm.ts#L751-L777) of `scm.ts`
 for these variables and function(s).
-See [`example/index.html`](example/index.html) for a simple example.
-
+See https://nukata.github.io/little-scheme-in-typescript/example/
+for a simple example.
 
 As a Scheme implementation, 
 it optimizes _tail calls_ and handles _first-class continuations_ properly.
@@ -59,7 +59,10 @@ $ node example/scm.js
 > 
 ```
 
-If you have a modern browser, open `example/index.html` with it.
+If you have a modern browser, open [`example/index.html`](example/index.html)
+or 
+https://nukata.github.io/little-scheme-in-typescript/example/
+with it.
 
 ```
 $ open example/index.html
