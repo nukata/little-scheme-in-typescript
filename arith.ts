@@ -1,5 +1,5 @@
-// A little arithmetic in TypeScript 3.5/Node 12
-//  R01.08.04 by SUZUKI Hisao
+// A little arithmetic in TypeScript 3.5/Node.js 12
+//      R01.08.04/R01.08.14 by SUZUKI Hisao
 
 'use strict'
 
@@ -7,7 +7,7 @@ type Numeric = number | bigint;
 
 // A Number value is treated as an inexact number.
 // A BigInt value is treated as an exact number.
-// Any intergers must be represented as BigInt.
+// Any intergers should be represented by BigInt if possible.
 
 // x + y
 function add(x: Numeric, y: Numeric): Numeric {

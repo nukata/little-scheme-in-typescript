@@ -1,7 +1,7 @@
 # A Little Scheme in TypeScript
 
 This is a small interpreter of a subset of Scheme
-in circa 900 lines of _TypeScript 3.5/Node.js 12_.
+in circa 800 lines of _TypeScript 3.5/Node.js 12_.
 It implements the same language as
 
 - [little-scheme-in-cs](https://github.com/nukata/little-scheme-in-cs)
@@ -16,7 +16,7 @@ and their meta-circular interpreter,
 You can run it on web browsers by giving appropriate values to
 `readStringFrom` and `write` and by setting
 `stdInOnData` (and `stdInOnEnd`) as the callback(s) of an asynchronous input.
-See the [head](scm.ts#L12-L18) and [tail](scm.ts#L751-L777) of `scm.ts`
+Refer to the [head](scm.ts#L12-L18) and [tail](scm.ts#L720-L746) of `scm.ts`
 for these variables and function(s).
 See https://nukata.github.io/little-scheme-in-typescript/example/
 for a simple example.
@@ -43,14 +43,9 @@ $ node scm.js
 > 
 ```
 
-Press EOF (e.g. Control-D) to exit the session.
 
-```
-> Goodbye
-$ 
-```
-
-If you do not have `tsc` (TypeScript Compiler), use `example/scm.js`.
+Or just use `example/scm.js`, which I provided by compiling `scm.ts`
+in the same way as above.
 
 ```
 $ node example/scm.js
@@ -59,15 +54,30 @@ $ node example/scm.js
 > 
 ```
 
-If you have a modern browser, open [`example/index.html`](example/index.html)
+
+Press EOF (e.g. Control-D) to exit the session.
+
+```
+> Goodbye
+$ 
+```
+
+
+You can also open `example/index.html`
 or 
 https://nukata.github.io/little-scheme-in-typescript/example/
-with it.
+with a modern web browser to run `scm.js`.
 
 ```
 $ open example/index.html
 ```
 
+```
+$ open https://nukata.github.io/little-scheme-in-typescript/example/
+```
+
+
+### How to run your Scheme script
 
 You can run `node scm.js` with a Scheme script.
 Examples are found in 
@@ -194,7 +204,7 @@ See [`GlobalEnv`](scm.ts#L317-L368)
 in `scm.ts` for the implementation of the procedures
 except `call/cc` and `apply`.  
 `call/cc` and `apply` are implemented particularly at 
-[`applyFunction`](scm.ts#L543-L576) in `scm.ts`.
+[`applyFunction`](scm.ts#L511-L546) in `scm.ts`.
 
 I hope this serves as a handy model of how to write a Scheme interpreter
 in TypeScript/JavaScript.

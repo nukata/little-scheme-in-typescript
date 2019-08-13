@@ -1,5 +1,5 @@
 // A little Scheme in TypeScript 3.5/Node.js 12
-//     v0.5 R01.08.01/R01.08.12 by SUZUKI Hisao
+//      v0.6 R01.08.01/R01.08.14 by SUZUKI Hisao
 // $ tsc -strict -t ESNext --outFile scm.js scm.ts && node scm.js
 
 /// <reference path="arith.ts" />
@@ -371,208 +371,177 @@ const GlobalEnv = new Environment(
 
 // Evaluate an expression in an environment asynchronously.
 async function evaluate(exp: unknown, env: Environment): Promise<unknown> {
-    const evl = new Evaluator(env);
-    let intrinsic;
-    [intrinsic, exp] = evl.evaluate1(exp);
-    while (intrinsic !== null) {
-        exp = await intrinsic.fun(exp as Cell);
-        [intrinsic, exp] = evl.continue1(exp);
-    }
-    return exp;
-}
-
-// Stepwise expression evaluator
-class Evaluator {
-    private env: Environment;
-    private k: Continuation;
-
-    constructor(env: Environment) {
-        this.env = env;
-        this.k = new Continuation();
-    }
-
-    private fetchFirst(exp: unknown): unknown {
+    const k = new Continuation();
+    try {
         for (;;) {
-            if (exp instanceof Cell) {
-                const kar = exp.car;
-                const kdr = exp.cdr as Cell;
-                if (kar === QuoteSym) { // (quote e)
-                    return kdr.car;
-                } else if (kar === IfSym) { // (if e1 e2 e3) or (if e1 e2)
-                    exp = kdr.car;
-                    this.k.push(ContOp.Then, kdr.cdr);
-                } else if (kar ===  BeginSym) { // (begin e...)
-                    exp = kdr.car;
-                    if (kdr.cdr !== null)
-                        this.k.push(ContOp.Begin, kdr.cdr);
-                } else if (kar === LambdaSym) { // (lambda (v...) e...)
-                    return new Closure(kdr.car as Cell,
-                                       kdr.cdr as Cell, this.env);
-                } else if (kar === DefineSym) { // (define v e)
-                    exp = snd(kdr);
-                    this.k.push(ContOp.Define, kdr.car);
-                } else if (kar === SetQSym) { // (set! v e)
-                    exp = snd(kdr);
-                    const v = kdr.car as Sym;
-                    this.k.push(ContOp.SetQ, this.env.lookFor(v));
-                } else {        // (fun arg...)
-                    exp = kar;
-                    this.k.push(ContOp.Apply, kdr);
-                }
-            } else if (exp instanceof Sym) {
-                return this.env.lookFor(exp).val;
-            } else {
-                return exp;     // a number, #t, #f etc.
-            }
-        }
-    }
-
-    // Evaluate an expression until the next intrinsic call.
-    evaluate1(exp: unknown): [Intrinsic | null, unknown] {
-        exp = this.fetchFirst(exp);
-        return this.continue1(exp);
-    }
-
-    // Continue the evaluation with a result of the intrinsic call.
-    continue1(exp: unknown): [Intrinsic | null, unknown] {
-        try {
             for (;;) {
-                Loop2:
-                for (;;) {
-                    // write('_' + this.k.length);
-                    if (this.k.length === 0)
-                        return [null, exp]; // exp is the evaluated result.
-                    const [op, x] = this.k.pop();
-                    switch (op) {
-                    case ContOp.Then: { // x is (e2) or (e2 e3).
-                        const j = x as Cell;
-                        if (exp === false) {
-                            if (j.cdr === null) {
-                                exp = None;
-                                break;
-                            } else {
-                                exp = snd(j); // e3
-                                break Loop2;
-                            }
+                if (exp instanceof Cell) {
+                    const kar = exp.car;
+                    const kdr = exp.cdr as Cell;
+                    if (kar === QuoteSym) { // (quote e)
+                        exp = kdr.car;
+                        break;
+                    } else if (kar === IfSym) { // (if e1 e2 e3) or (if e1 e2)
+                        exp = kdr.car;
+                        k.push(ContOp.Then, kdr.cdr);
+                    } else if (kar ===  BeginSym) { // (begin e...)
+                        exp = kdr.car;
+                        if (kdr.cdr !== null)
+                            k.push(ContOp.Begin, kdr.cdr);
+                    } else if (kar === LambdaSym) { // (lambda (v...) e...)
+                        exp = new Closure(kdr.car as Cell,
+                                          kdr.cdr as Cell, env);
+                        break;
+                    } else if (kar === DefineSym) { // (define v e)
+                        exp = snd(kdr);
+                        k.push(ContOp.Define, kdr.car);
+                    } else if (kar === SetQSym) { // (set! v e)
+                        exp = snd(kdr);
+                        const v = kdr.car as Sym;
+                        k.push(ContOp.SetQ, env.lookFor(v));
+                    } else {    // (fun arg...)
+                        exp = kar;
+                        k.push(ContOp.Apply, kdr);
+                    }
+                } else if (exp instanceof Sym) {
+                    exp = env.lookFor(exp).val;
+                    break;
+                } else {
+                    break;      // a number, #t, #f etc.
+                }
+            }
+            Loop2:
+            for (;;) {
+                // write('_' + k.length);
+                if (k.length === 0)
+                    return exp;
+                const [op, x] = k.pop();
+                switch (op) {
+                case ContOp.Then: { // x is (e2) or (e2 e3).
+                    const j = x as Cell;
+                    if (exp === false) {
+                        if (j.cdr === null) {
+                            exp = None;
+                            break;
                         } else {
-                            exp = j.car; // e2
+                            exp = snd(j); // e3
                             break Loop2;
                         }
-                    }
-                    case ContOp.Begin: { // x is (e...).
-                        const j = x as Cell;
-                        if (j.cdr !== null) // Unless on a tail call...
-                            this.k.push(ContOp.Begin, j.cdr);
-                        exp = j.car;
+                    } else {
+                        exp = j.car; // e2
                         break Loop2;
                     }
-                    case ContOp.Define: // x is a variable name.
-                        //if (this.env.sym !== null)
-                        //    throw Error('no frame marker');
-                        this.env.next = new Environment(x as Sym, exp,
-                                                        this.env.next);
-                        exp = None;
+                }
+                case ContOp.Begin: { // x is (e...).
+                    const j = x as Cell;
+                    if (j.cdr !== null) // Unless on a tail call...
+                        k.push(ContOp.Begin, j.cdr);
+                    exp = j.car;
+                    break Loop2;
+                }
+                case ContOp.Define: // x is a variable name.
+                    //if (env.sym !== null) throw Error('no frame marker');
+                    env.next = new Environment(x as Sym, exp, env.next);
+                    exp = None;
+                    break;
+                case ContOp.SetQ: // x is an Environment.
+                    (x as Environment).val = exp;
+                    exp = None;
+                    break;
+                case ContOp.Apply:
+                    // x is a list of args; exp is a function.
+                    if (x === null) {
+                        [exp, env] = await applyFunction(exp, null, k, env);
+                        if (exp instanceof Promise)
+                            exp = await exp;
                         break;
-                    case ContOp.SetQ: // x is an Environment.
-                        (x as Environment).val = exp;
-                        exp = None;
-                        break;
-                    case ContOp.Apply:
-                        // x is a list of args; exp is a function.
-                        if (x === null) {
-                            let intrinsic;
-                            [intrinsic, exp] = this.applyFunction(exp, null);
-                            if (intrinsic !== null)
-                                return [intrinsic, exp];
-                            break;
-                        } else {
-                            this.k.push(ContOp.ApplyFun, exp);
-                            let j = x as Cell;
-                            while (j.cdr !== null) {
-                                this.k.push(ContOp.EvalArg, j.car);
-                                j = j.cdr as Cell;
-                            }
-                            exp = j.car;
-                            this.k.push(ContOp.ConsArgs, null);
-                            break Loop2;
+                    } else {
+                        k.push(ContOp.ApplyFun, exp);
+                        let j = x as Cell;
+                        while (j.cdr !== null) {
+                            k.push(ContOp.EvalArg, j.car);
+                            j = j.cdr as Cell;
                         }
-                    case ContOp.ConsArgs:
-                        // x is a list of evaluated args (to be cdr);
-                        // exp is a newly evaluated arg (to be car).
-                        const args = new Cell(exp, x);
-                        const [op2, exp2] = this.k.pop();
-                        switch (op2) {
-                        case ContOp.EvalArg: // exp2 is the next arg.
-                            exp = exp2;
-                            this.k.push(ContOp.ConsArgs, args);
-                            break Loop2;
-                        case ContOp.ApplyFun: // exp2 is a function.
-                            let intrinsic;
-                            [intrinsic, exp] = this.applyFunction(exp2, args);
-                            if (intrinsic !== null)
-                                return [intrinsic, exp];
-                            break;
-                        default:
-                            throw Error('invalid operation: ' + op2);
-                        }
-                        break;
-                    case ContOp.RestoreEnv: // x is an Environment.
-                        this.env = x as Environment;
+                        exp = j.car;
+                        k.push(ContOp.ConsArgs, null);
+                        break Loop2;
+                    }
+                case ContOp.ConsArgs:
+                    // x is a list of evaluated args (to be cdr);
+                    // exp is a newly evaluated arg (to be car).
+                    const args = new Cell(exp, x);
+                    const [op2, exp2] = k.pop();
+                    switch (op2) {
+                    case ContOp.EvalArg: // exp2 is the next arg.
+                        exp = exp2;
+                        k.push(ContOp.ConsArgs, args);
+                        break Loop2;
+                    case ContOp.ApplyFun: // exp2 is a function.
+                        [exp, env] = await applyFunction(exp2, args, k, env);
+                        if (exp instanceof Promise)
+                            exp = await exp;
                         break;
                     default:
-                        throw Error('invalid operation: ' + op);
+                        throw Error('invalid operation: ' + op2);
                     }
-                } // end Loop2
-                exp = this.fetchFirst(exp);
-            }
-        } catch (ex) {
-            if (ex instanceof ErrorException)
-                throw ex;
-            else if (this.k.length === 0)
-                throw ex;
-            const ex2 = new Error(ex + '\n\t' + stringify(this.k));
-            if (typeof ex === 'object' && ex !== null) {
-                const stack = ex.stack; // non-standard
-                if (stack !== undefined)
-                    ex2.stack = ex2.message + stack;
-            }
-            throw ex2;
+                    break;
+                case ContOp.RestoreEnv: // x is an Environment.
+                    env = x as Environment;
+                    break;
+                default:
+                    throw Error('invalid operation: ' + op);
+                }
+            } // end Loop2
         }
+    } catch (ex) {
+        if (ex instanceof ErrorException)
+            throw ex;
+        else if (k.length === 0)
+            throw ex;
+        const ex2 = new Error(ex + '\n\t' + stringify(k));
+        if (typeof ex === 'object' && ex !== null) {
+            const stack = ex.stack; // non-standard
+            if (stack !== undefined)
+                ex2.stack = ex2.message + stack;
+        }
+        throw ex2;
     }
+}
 
-    // Apply a function to arguments.
-    applyFunction(fun: unknown, arg: List): [Intrinsic | null, unknown] {
-        for (;;)
-            if (fun === CallCCSym) {
-                this.k.pushRestoreEnv(this.env);
-                fun = fst(arg);
-                arg = new Cell(new Continuation(this.k), null);
-            } else if (fun === ApplySym) {
-                fun = fst(arg);
-                arg = snd(arg) as List;
-            } else {
-                break;
-            }
-        if (fun instanceof Intrinsic) {
-            if (fun.arity >= 0)
-                if (arg === null ? fun.arity > 0 : arg.length !== fun.arity)
-                    throw Error('arity not matched: ' + fun + ' and ' +
-                                stringify(arg));
-            return [fun, arg];
-        } else if (fun instanceof Closure) {
-            this.k.pushRestoreEnv(this.env);
-            this.k.push(ContOp.Begin, fun.body);
-            this.env = new Environment(null, // frame marker
-                                       null,
-                                       fun.env.prependDefs(fun.params, arg));
-            return [null, None];
-        } else if (fun instanceof Continuation) {
-            this.k.copyFrom(fun);
-            return [null, fst(arg)];
+// Apply a function to arguments.
+function applyFunction(fun: unknown, arg: List, k: Continuation,
+                       env: Environment): [unknown, Environment]
+{
+    for (;;)
+        if (fun === CallCCSym) {
+            k.pushRestoreEnv(env);
+            fun = fst(arg);
+            arg = new Cell(new Continuation(k), null);
+        } else if (fun === ApplySym) {
+            fun = fst(arg);
+            arg = snd(arg) as List;
         } else {
-            throw Error('not a function: ' + stringify(fun) + ' with ' +
-                        stringify(arg));
+            break;
         }
+    if (fun instanceof Intrinsic) {
+        if (fun.arity >= 0)
+            if (arg === null ? fun.arity > 0 : arg.length !== fun.arity)
+                throw Error('arity not matched: ' + fun + ' and ' +
+                            stringify(arg));
+        let result = fun.fun(arg);
+        return [result, env];
+    } else if (fun instanceof Closure) {
+        k.pushRestoreEnv(env);
+        k.push(ContOp.Begin, fun.body);
+        return [None, new Environment(null, // frame marker
+                                      null,
+                                      fun.env.prependDefs(fun.params, arg))];
+    } else if (fun instanceof Continuation) {
+        k.copyFrom(fun);
+        return [fst(arg), env];
+    } else {
+        throw Error('not a function: ' + stringify(fun) + ' with ' +
+                    stringify(arg));
     }
 }
 
