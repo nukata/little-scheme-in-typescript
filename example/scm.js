@@ -78,7 +78,7 @@ function tryToParse(token) {
     }
 }
 // A little Scheme in TypeScript 3.5/Node.js 12
-//      v0.6 R01.08.01/R01.08.14 by SUZUKI Hisao
+//      v1.0 R01.08.01/R01.08.14 by SUZUKI Hisao
 // $ tsc -strict -t ESNext --outFile scm.js scm.ts && node scm.js
 /// <reference path="arith.ts" />
 // Run the callback on the next event loop.
@@ -472,7 +472,7 @@ async function evaluate(exp, env) {
                     case ContOp.Apply:
                         // x is a list of args; exp is a function.
                         if (x === null) {
-                            [exp, env] = await applyFunction(exp, null, k, env);
+                            [exp, env] = applyFunction(exp, null, k, env);
                             if (exp instanceof Promise)
                                 exp = await exp;
                             break;
@@ -499,7 +499,7 @@ async function evaluate(exp, env) {
                                 k.push(ContOp.ConsArgs, args);
                                 break Loop2;
                             case ContOp.ApplyFun: // exp2 is a function.
-                                [exp, env] = await applyFunction(exp2, args, k, env);
+                                [exp, env] = applyFunction(exp2, args, k, env);
                                 if (exp instanceof Promise)
                                     exp = await exp;
                                 break;

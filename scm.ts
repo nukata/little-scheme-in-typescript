@@ -451,7 +451,7 @@ async function evaluate(exp: unknown, env: Environment): Promise<unknown> {
                 case ContOp.Apply:
                     // x is a list of args; exp is a function.
                     if (x === null) {
-                        [exp, env] = await applyFunction(exp, null, k, env);
+                        [exp, env] = applyFunction(exp, null, k, env);
                         if (exp instanceof Promise)
                             exp = await exp;
                         break;
@@ -477,7 +477,7 @@ async function evaluate(exp: unknown, env: Environment): Promise<unknown> {
                         k.push(ContOp.ConsArgs, args);
                         break Loop2;
                     case ContOp.ApplyFun: // exp2 is a function.
-                        [exp, env] = await applyFunction(exp2, args, k, env);
+                        [exp, env] = applyFunction(exp2, args, k, env);
                         if (exp instanceof Promise)
                             exp = await exp;
                         break;
