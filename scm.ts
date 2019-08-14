@@ -1,5 +1,5 @@
 // A little Scheme in TypeScript 3.5/Node.js 12
-//      v0.6 R01.08.01/R01.08.14 by SUZUKI Hisao
+//      v1.0 R01.08.01/R01.08.14 by SUZUKI Hisao
 // $ tsc -strict -t ESNext --outFile scm.js scm.ts && node scm.js
 
 /// <reference path="arith.ts" />
