@@ -1,5 +1,5 @@
-// A little Scheme in TypeScript 3.5/Node.js 12
-//      v1.0 R01.08.01/R01.08.14 by SUZUKI Hisao
+// A little Scheme in TypeScript 3.7
+//      v1.1 R01.08.01/R01.11.13 by SUZUKI Hisao
 // $ tsc -strict -t ESNext --outFile scm.js scm.ts && node scm.js
 
 /// <reference path="arith.ts" />
@@ -21,7 +21,7 @@ let write: (s: string) => void;
 
 // Cons cell
 class Cell {
-    constructor(public car: unknown,
+    constructor(public readonly car: unknown,
                 public cdr: unknown) {}
 
     // Yield car, cadr, caddr and so on.
@@ -44,7 +44,7 @@ class Cell {
 }
 
 class ImproperListException extends Error {
-    constructor(public tail: unknown) {
+    constructor(public readonly tail: unknown) {
         super();
     }
 }
@@ -66,12 +66,8 @@ function snd(x: List): unknown {
 
 // Scheme's symbol
 class Sym {
-    private name: string;
-
     // Construct a symbol that is not interned yet.
-    private constructor(name: string) {
-        this.name = name;
-    }
+    private constructor(private readonly name: string) {}
 
     toString(): string { return this.name; }
 
@@ -102,7 +98,7 @@ const CallCCSym = Sym.interned('call/cc');
 
 // Linked list of bindings mapping symbols to values
 class Environment {
-    constructor(public sym: Sym | null,
+    constructor(public readonly sym: Sym | null,
                 public val: unknown,
                 public next: Environment | null) {}
 
@@ -209,18 +205,18 @@ class Continuation {
 
 // Lambda expression with its environment
 class Closure {
-    constructor(public params: List,
-                public body: Cell,
-                public env: Environment) {}
+    constructor(public readonly params: List,
+                public readonly body: Cell,
+                public readonly env: Environment) {}
 }
 
 type IntrinsicBody = (args: List) => unknown;
 
 // Built-in function
 class Intrinsic {
-    constructor(public name: string,
-                public arity: number,
-                public fun: IntrinsicBody) {}
+    constructor(public readonly name: string,
+                public readonly arity: number,
+                public readonly fun: IntrinsicBody) {}
 
     toString(): string {
         return '$<' + this.name + ':' + this.arity + '>';
@@ -290,6 +286,8 @@ function stringify(exp: unknown, quote: boolean = true): string {
             ':' + stringify(exp.env) + '>';
     } else if ((typeof exp === 'string') && quote) {
         return '"' + exp + '"';
+    } else if (isNumeric(exp)) {
+        return convertToString(exp);
     } else {
         return '' + exp;
     }
@@ -340,11 +338,7 @@ const GlobalEnv = new Environment(
                 const a = fst(x);
                 const b = snd(x);
                 if (a === b) return true;
-                try {
-                    return compare(a as Numeric, b as Numeric) === 0;
-                } catch (ex) {
-                    return false;
-                }
+                return isNumeric(a) && isNumeric(b) && compare(a, b) == 0;
             },
               c('pair?', 1, x => fst(x) instanceof Cell,
                 c('null?', 1, x => fst(x) === null,
@@ -591,7 +585,7 @@ function readFromTokens(tokens: string[]): unknown {
             if (tokens[0] === '.') {
                 tokens.shift();
                 y.cdr = readFromTokens(tokens);
-                if (tokens[0] !== ')')
+                if (tokens[0] as string !== ')') // XXX cf. TypeScript #33443
                     throw SyntaxError(') is expected');
                 break
             }

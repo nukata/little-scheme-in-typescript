@@ -1,19 +1,24 @@
-// A little arithmetic in TypeScript 3.5/Node.js 12
-//      R01.08.04/R01.08.14 by SUZUKI Hisao
+// A little arithmetic in TypeScript 3.7 by SUZUKI Hisao (R01.08.04/R01.11.13)
 'use strict';
 // A Number value is treated as an inexact number.
 // A BigInt value is treated as an exact number.
 // Any intergers should be represented by BigInt if possible.
+// If the runtime does not have BigInt, arithmetic will be done with Number.
+// Is x a Numeric?
+function isNumeric(x) {
+    let t = typeof x;
+    return t === 'number' || t === 'bigint';
+}
 // x + y
 function add(x, y) {
-    if (typeof x == 'number') {
-        if (typeof y == 'number')
+    if (typeof x === 'number') {
+        if (typeof y === 'number')
             return x + y;
         else
             return x + Number(y);
     }
     else {
-        if (typeof y == 'number')
+        if (typeof y === 'number')
             return Number(x) + y;
         else
             return x + y;
@@ -21,14 +26,14 @@ function add(x, y) {
 }
 // x - y
 function subtract(x, y) {
-    if (typeof x == 'number') {
-        if (typeof y == 'number')
+    if (typeof x === 'number') {
+        if (typeof y === 'number')
             return x - y;
         else
             return x - Number(y);
     }
     else {
-        if (typeof y == 'number')
+        if (typeof y === 'number')
             return Number(x) - y;
         else
             return x - y;
@@ -36,14 +41,14 @@ function subtract(x, y) {
 }
 // x * y
 function multiply(x, y) {
-    if (typeof x == 'number') {
-        if (typeof y == 'number')
+    if (typeof x === 'number') {
+        if (typeof y === 'number')
             return x * y;
         else
             return x * Number(y);
     }
     else {
-        if (typeof y == 'number')
+        if (typeof y === 'number')
             return Number(x) * y;
         else
             return x * y;
@@ -52,14 +57,14 @@ function multiply(x, y) {
 // Compare x and y.
 // -1, 0 or 1 as x is less than, equal to, or greater than y.
 function compare(x, y) {
-    if (typeof x == 'number') {
-        if (typeof y == 'number')
+    if (typeof x === 'number') {
+        if (typeof y === 'number')
             return Math.sign(x - y);
         else
             return Math.sign(x - Number(y));
     }
     else {
-        if (typeof y == 'number')
+        if (typeof y === 'number')
             return Math.sign(Number(x) - y);
         else
             return (x < y) ? -1 : (y < x) ? 1 : 0;
@@ -77,8 +82,17 @@ function tryToParse(token) {
         return n;
     }
 }
-// A little Scheme in TypeScript 3.5/Node.js 12
-//      v1.0 R01.08.01/R01.08.14 by SUZUKI Hisao
+// Convert x to string.
+function convertToString(x) {
+    let s = x + '';
+    if (typeof BigInt !== 'undefined')
+        if (typeof x === 'number')
+            if (Number.isInteger(x) && !s.includes('e'))
+                return s + '.0'; // 123.0 => '123.0'
+    return s;
+}
+// A little Scheme in TypeScript 3.7
+//      v1.1 R01.08.01/R01.11.13 by SUZUKI Hisao
 // $ tsc -strict -t ESNext --outFile scm.js scm.ts && node scm.js
 /// <reference path="arith.ts" />
 // Run the callback on the next event loop.
@@ -337,6 +351,9 @@ function stringify(exp, quote = true) {
     else if ((typeof exp === 'string') && quote) {
         return '"' + exp + '"';
     }
+    else if (isNumeric(exp)) {
+        return convertToString(exp);
+    }
     else {
         return '' + exp;
     }
@@ -364,12 +381,7 @@ null, c('car', 1, x => fst(x).car, c('cdr', 1, x => fst(x).cdr, c('cons', 2, x =
     const b = snd(x);
     if (a === b)
         return true;
-    try {
-        return compare(a, b) === 0;
-    }
-    catch (ex) {
-        return false;
-    }
+    return isNumeric(a) && isNumeric(b) && compare(a, b) == 0;
 }, c('pair?', 1, x => fst(x) instanceof Cell, c('null?', 1, x => fst(x) === null, c('not', 1, x => fst(x) === false, c('list', -1, x => x, c('display', 1, x => {
     write(stringify(fst(x), false));
     return new Promise(resolve => {
@@ -614,7 +626,7 @@ function readFromTokens(tokens) {
                 if (tokens[0] === '.') {
                     tokens.shift();
                     y.cdr = readFromTokens(tokens);
-                    if (tokens[0] !== ')')
+                    if (tokens[0] !== ')') // XXX cf. TypeScript #33443
                         throw SyntaxError(') is expected');
                     break;
                 }

@@ -1,7 +1,7 @@
 # A Little Scheme in TypeScript
 
 This is a small interpreter of a subset of Scheme
-in circa 800 lines of _TypeScript 3.5/Node.js 12_.
+in circa 800 lines of _TypeScript 3.7_.
 It implements the same language as
 
 - [little-scheme-in-cs](https://github.com/nukata/little-scheme-in-cs)
@@ -16,7 +16,7 @@ and their meta-circular interpreter,
 You can run it on web browsers by giving appropriate values to
 `readStringFrom` and `write` and by setting
 `stdInOnData` (and `stdInOnEnd`) as the callback(s) of an asynchronous input.
-Refer to the [head](scm.ts#L12-L18) and [tail](scm.ts#L720-L746) of `scm.ts`
+Refer to the [head](scm.ts#L12-L18) and [tail](scm.ts#L714-L740) of `scm.ts`
 for these variables and function(s).
 See https://nukata.github.io/little-scheme-in-typescript/example/
 for a simple example.
@@ -28,7 +28,11 @@ it optimizes _tail calls_ and handles _first-class continuations_ properly.
 ## How to run
 
 ```
+$ tsc --version
+Version 3.7.2
 $ tsc -strict -t ESNext --outFile scm.js scm.ts
+$ node --version
+v12.12.0
 $ node scm.js
 > (+ 5 6)
 11
@@ -148,9 +152,9 @@ list not null? pair? eqv? eq? cons cdr car fibonacci)
   which is supported by
   [TypeScipt 3.2](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-3-2.html)
   and later,  Node.js 10.4 and later, Firefox 68 and later etc.
-  On the platforms that do not support `bigint` (e.g. Safari 12.1), integers
+  On the platforms that do not support `bigint` (e.g. Safari 13.0), integers
   are represented by `number` automatically.
-  See [`tryToParse`](arith.ts#L73-L83) in `arith.ts`.
+  See [`tryToParse`](arith.ts#L79-L89) in `arith.ts`.
 
 The implementation is similar to those of
 [little-scheme-in-dart](https://github.com/nukata/little-scheme-in-dart) and
@@ -200,11 +204,11 @@ For simplicity, this Scheme treats (`define` _v_ _e_) as an expression type.
 - `(globals)` returns a list of keys of the global environment.
   It is not in the standard.
 
-See [`GlobalEnv`](scm.ts#L317-L368)
+See [`GlobalEnv`](scm.ts#L315-L362)
 in `scm.ts` for the implementation of the procedures
 except `call/cc` and `apply`.  
 `call/cc` and `apply` are implemented particularly at 
-[`applyFunction`](scm.ts#L511-L546) in `scm.ts`.
+[`applyFunction`](scm.ts#L505-L540) in `scm.ts`.
 
 I hope this serves as a handy model of how to write a Scheme interpreter
 in TypeScript/JavaScript.

@@ -1,5 +1,4 @@
-// A little arithmetic in TypeScript 3.5/Node.js 12
-//      R01.08.04/R01.08.14 by SUZUKI Hisao
+// A little arithmetic in TypeScript 3.7 by SUZUKI Hisao (R01.08.04/R01.11.13)
 
 'use strict'
 
@@ -8,16 +7,23 @@ type Numeric = number | bigint;
 // A Number value is treated as an inexact number.
 // A BigInt value is treated as an exact number.
 // Any intergers should be represented by BigInt if possible.
+// If the runtime does not have BigInt, arithmetic will be done with Number.
+
+// Is x a Numeric?
+function isNumeric(x: unknown): x is Numeric {
+    let t = typeof x;
+    return t === 'number' || t === 'bigint';
+}
 
 // x + y
 function add(x: Numeric, y: Numeric): Numeric {
-    if (typeof x == 'number') {
-        if (typeof y == 'number')
+    if (typeof x === 'number') {
+        if (typeof y === 'number')
             return x + y;
         else
             return x + Number(y);
     } else {
-        if (typeof y == 'number')
+        if (typeof y === 'number')
             return Number(x) + y;
         else
             return x + y;
@@ -26,13 +32,13 @@ function add(x: Numeric, y: Numeric): Numeric {
 
 // x - y
 function subtract(x: Numeric, y: Numeric): Numeric {
-    if (typeof x == 'number') {
-        if (typeof y == 'number')
+    if (typeof x === 'number') {
+        if (typeof y === 'number')
             return x - y;
         else
             return x - Number(y);
     } else {
-        if (typeof y == 'number')
+        if (typeof y === 'number')
             return Number(x) - y;
         else
             return x - y;
@@ -41,13 +47,13 @@ function subtract(x: Numeric, y: Numeric): Numeric {
 
 // x * y
 function multiply(x: Numeric, y: Numeric): Numeric {
-    if (typeof x == 'number') {
-        if (typeof y == 'number')
+    if (typeof x === 'number') {
+        if (typeof y === 'number')
             return x * y;
         else
             return x * Number(y);
     } else {
-        if (typeof y == 'number')
+        if (typeof y === 'number')
             return Number(x) * y;
         else
             return x * y;
@@ -57,13 +63,13 @@ function multiply(x: Numeric, y: Numeric): Numeric {
 // Compare x and y.
 // -1, 0 or 1 as x is less than, equal to, or greater than y.
 function compare(x: Numeric, y: Numeric): number {
-    if (typeof x == 'number') {
-        if (typeof y == 'number')
+    if (typeof x === 'number') {
+        if (typeof y === 'number')
             return Math.sign(x - y);
         else
             return Math.sign(x - Number(y));
     } else {
-        if (typeof y == 'number')
+        if (typeof y === 'number')
             return Math.sign(Number(x) - y);
         else
             return (x < y) ? -1 : (y < x) ? 1 : 0;
@@ -80,4 +86,14 @@ function tryToParse(token: string): Numeric | null {
             return null;
         return n;
     }
+}
+
+// Convert x to string.
+function convertToString(x: Numeric): string {
+    let s = x + '';
+    if (typeof BigInt !== 'undefined')
+        if (typeof x === 'number')
+            if (Number.isInteger(x) && !s.includes('e'))
+                return s + '.0';    // 123.0 => '123.0'
+    return s;
 }
