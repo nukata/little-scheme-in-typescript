@@ -5,6 +5,7 @@ in circa 800 lines of _TypeScript 3.7_.
 It implements the same language as
 
 - [little-scheme-in-cs](https://github.com/nukata/little-scheme-in-cs)
+- [little-scheme-in-dart](https://github.com/nukata/little-scheme-in-dart)
 - [little-scheme-in-go](https://github.com/nukata/little-scheme-in-go)
 - [little-scheme-in-java](https://github.com/nukata/little-scheme-in-java)
 - [little-scheme-in-python](https://github.com/nukata/little-scheme-in-python)
@@ -13,7 +14,7 @@ It implements the same language as
 and their meta-circular interpreter, 
 [little-scheme](https://github.com/nukata/little-scheme).
 
-You can run it on web browsers by giving appropriate values to
+You can run it on _web browsers_ by giving appropriate values to
 `readStringFrom` and `write` and by setting
 `stdInOnData` (and `stdInOnEnd`) as the callback(s) of an asynchronous input.
 Refer to the [head](scm.ts#L12-L18) and [tail](scm.ts#L714-L740) of `scm.ts`
