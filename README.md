@@ -69,7 +69,7 @@ I revised the iterations as follows:
     }
 ```
 
-Now the interpreter runs slightly (about 140%) faster than before.
+Now the interpreter runs slightly (about 1.4 times) faster than before.
 
 
 ## How to run
