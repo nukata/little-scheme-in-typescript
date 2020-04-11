@@ -91,8 +91,8 @@ function convertToString(x) {
                 return s + '.0'; // 123.0 => '123.0'
     return s;
 }
-// A little Scheme in TypeScript 3.7
-//      v1.1 R01.08.01/R01.11.13 by SUZUKI Hisao
+// A Little Scheme in TypeScript 3.8
+//      v1.2 R01.08.01/R02.04.11 by SUZUKI Hisao
 // $ tsc -strict -t ESNext --outFile scm.js scm.ts && node scm.js
 /// <reference path="arith.ts" />
 // Run the callback on the next event loop.
@@ -112,15 +112,30 @@ class Cell {
         this.cdr = cdr;
     }
     // Yield car, cadr, caddr and so on.
-    *[Symbol.iterator]() {
+    [Symbol.iterator]() {
         let j = this;
-        while (j instanceof Cell) {
-            yield j.car;
-            j = j.cdr;
-        }
-        if (j !== null)
-            throw new ImproperListException(j);
+        return {
+            next: () => {
+                if (j === null) {
+                    return {
+                        done: true
+                    };
+                }
+                else if (j instanceof Cell) {
+                    let val = j.car;
+                    j = j.cdr;
+                    return {
+                        done: false,
+                        value: val
+                    };
+                }
+                else {
+                    throw new ImproperListException(j);
+                }
+            }
+        };
     }
+    // This is slightly faster than *[Symbol.iterator]() {... yield j.car ...}.
     // Length as a list
     get length() {
         let i = 0;
@@ -180,13 +195,28 @@ class Environment {
         this.next = next;
     }
     // Yield each binding.
-    *[Symbol.iterator]() {
+    [Symbol.iterator]() {
         let env = this;
-        while (env !== null) {
-            yield env;
-            env = env.next;
-        }
+        return {
+            next: () => {
+                if (env === null) {
+                    return {
+                        done: true,
+                        value: this // XXX Just to suppress TS2532 error :-(
+                    };
+                }
+                else {
+                    let val = env;
+                    env = env.next;
+                    return {
+                        done: false,
+                        value: val
+                    };
+                }
+            }
+        };
     }
+    // This is slightly faster than *[Symbol.iterator]() {... yield env ...}.
     // Search the bindings for a symbol.
     lookFor(sym) {
         for (const env of this)
@@ -299,6 +329,10 @@ class EOFException extends Error {
 const None = { toString: () => '#<VOID>' };
 // A unique value which means the End Of File
 const EOF = { toString: () => '#<EOF>' };
+// A unique value which represents the call/cc procedure
+const CallCCVal = { toString: () => '#<call/cc>' };
+// A unique value which represents the apply procedure
+const ApplyVal = { toString: () => '#<apply>' };
 //----------------------------------------------------------------------
 // Convert an expression to a string.
 function stringify(exp, quote = true) {
@@ -371,18 +405,12 @@ function globals(x) {
             j = new Cell(e.sym, j);
     return j;
 }
-let G1 = c('+', 2, x => add(fst(x), snd(x)), c('-', 2, x => subtract(fst(x), snd(x)), c('*', 2, x => multiply(fst(x), snd(x)), c('<', 2, x => compare(fst(x), snd(x)) < 0, c('=', 2, x => compare(fst(x), snd(x)) === 0, c('error', 2, x => {
+let G1 = c('+', 2, x => add(fst(x), snd(x)), c('-', 2, x => subtract(fst(x), snd(x)), c('*', 2, x => multiply(fst(x), snd(x)), c('<', 2, x => compare(fst(x), snd(x)) < 0, c('=', 2, x => compare(fst(x), snd(x)) === 0, c('number?', 1, x => isNumeric(fst(x)), c('error', 2, x => {
     throw new ErrorException(fst(x), snd(x));
-}, c('globals', 0, globals, new Environment(CallCCSym, CallCCSym, new Environment(ApplySym, ApplySym, null)))))))));
+}, c('globals', 0, globals, null))))))));
 // The global environment
 const GlobalEnv = new Environment(null, // frame marker
-null, c('car', 1, x => fst(x).car, c('cdr', 1, x => fst(x).cdr, c('cons', 2, x => new Cell(fst(x), snd(x)), c('eq?', 2, x => Object.is(fst(x), snd(x)), c('eqv?', 2, x => {
-    const a = fst(x);
-    const b = snd(x);
-    if (a === b)
-        return true;
-    return isNumeric(a) && isNumeric(b) && compare(a, b) == 0;
-}, c('pair?', 1, x => fst(x) instanceof Cell, c('null?', 1, x => fst(x) === null, c('not', 1, x => fst(x) === false, c('list', -1, x => x, c('display', 1, x => {
+null, c('car', 1, x => fst(x).car, c('cdr', 1, x => fst(x).cdr, c('cons', 2, x => new Cell(fst(x), snd(x)), c('eq?', 2, x => Object.is(fst(x), snd(x)), c('pair?', 1, x => fst(x) instanceof Cell, c('null?', 1, x => fst(x) === null, c('not', 1, x => fst(x) === false, c('list', -1, x => x, c('display', 1, x => {
     write(stringify(fst(x), false));
     return new Promise(resolve => {
         runOnNextLoop(() => resolve(None));
@@ -392,7 +420,7 @@ null, c('car', 1, x => fst(x).car, c('cdr', 1, x => fst(x).cdr, c('cons', 2, x =
     return new Promise(resolve => {
         runOnNextLoop(() => resolve(None));
     });
-}, c('read', 0, x => readExpression('', ''), c('eof-object?', 1, x => fst(x) === EOF, c('symbol?', 1, x => fst(x) instanceof Sym, G1)))))))))))))));
+}, c('read', 0, x => readExpression('', ''), c('eof-object?', 1, x => fst(x) === EOF, c('symbol?', 1, x => fst(x) instanceof Sym, new Environment(CallCCSym, CallCCVal, new Environment(ApplySym, ApplyVal, G1))))))))))))))));
 //----------------------------------------------------------------------
 // Evaluate an expression in an environment asynchronously.
 async function evaluate(exp, env) {
@@ -545,12 +573,12 @@ async function evaluate(exp, env) {
 // Apply a function to arguments.
 function applyFunction(fun, arg, k, env) {
     for (;;)
-        if (fun === CallCCSym) {
+        if (fun === CallCCVal) {
             k.pushRestoreEnv(env);
             fun = fst(arg);
             arg = new Cell(new Continuation(k), null);
         }
-        else if (fun === ApplySym) {
+        else if (fun === ApplyVal) {
             fun = fst(arg);
             arg = snd(arg);
         }
