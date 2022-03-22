@@ -1,21 +1,30 @@
-// A Little Scheme in TypeScript 3.8
-//      v1.2 R01.08.01/R02.04.11 by SUZUKI Hisao
-// $ tsc -strict -t ESNext --outFile scm.js scm.ts && node scm.js
+// A Little Scheme in TypeScript 4.6 / Deno 1.20
+//      v2.0 R01.08.01/R04.03.22 by SUZUKI Hisao
+//   $ tsc --strict -t es2020 scm.ts && deno run scm.js
+// | $ deno run scm.ts
+// | $ deno bundle scm.ts scm.js && deno run scm.js
 
-/// <reference path="arith.ts" />
+'use strict';
+
+import {
+    Numeric, isNumeric, add, subtract, multiply, compare, tryToParse,
+    convertToString
+// @ts-ignore error TS2691 -- Deno needs the suffix here.
+} from "./arith.ts";
 
 // Run the callback on the next event loop.
 let runOnNextLoop = (callback: () => void) => {
     setTimeout(callback, 0);
-}
+};
 
 // Read the whole file of fileName as a string.
 let readStringFrom: (fileName: string) => string;
 
-// Write the strig s (a new line on '\n').
+// Write the strig s (and a new line on '\n').
 let write: (s: string) => void;
 
-// Set stdInOnData and stdInOnEnd as the callbacks of the standard-in.
+// Read a line as a string, or null when End-Of-File is read.
+let readLine: () => Promise<string | null>;
 
 //----------------------------------------------------------------------
 
@@ -25,33 +34,20 @@ class Cell {
                 public cdr: unknown) {}
 
     // Yield car, cadr, caddr and so on.
-    [Symbol.iterator]() {
+    *[Symbol.iterator]() {
         let j: unknown = this;
-        return {
-            next: () => {
-                if (j === null) {
-                    return {
-                        done: true
-                    };
-                } else if (j instanceof Cell) {
-                    let val = j.car;
-                    j = j.cdr;
-                    return {
-                        done: false,
-                        value: val
-                    };
-                } else {
-                    throw new ImproperListException(j);
-                }
-            }
+        while (j instanceof Cell) {
+            yield j.car;
+            j = j.cdr;
         }
+        if (j !== null)
+            throw new ImproperListException(j);
     }
-    // This is slightly faster than *[Symbol.iterator]() {... yield j.car ...}.
 
     // Length as a list
     get length(): number {
         let i = 0;
-        for (const e of this) i++;
+        for (const _e of this) i++;
         return i;
     }
 }
@@ -116,27 +112,13 @@ class Environment {
                 public next: Environment | null) {}
 
     // Yield each binding.
-    [Symbol.iterator]() {
+    *[Symbol.iterator]() {
         let env: Environment | null = this;
-        return {
-            next: () => {
-                if (env === null) {
-                    return {
-                        done: true,
-                        value: this // XXX Just to suppress TS2532 error :-(
-                    };
-                } else {
-                    let val = env;
-                    env = env.next;
-                    return {
-                        done: false,
-                        value: val
-                    };
-                }
-            }
+        while (env !== null) {
+            yield env;
+            env = env.next;
         }
     }
-    // This is slightly faster than *[Symbol.iterator]() {... yield env ...}.
 
     // Search the bindings for a symbol.
     lookFor(sym: Sym): Environment {
@@ -280,7 +262,7 @@ const ApplyVal = { toString: () => '#<apply>' };
 //----------------------------------------------------------------------
 
 // Convert an expression to a string.
-function stringify(exp: unknown, quote: boolean = true): string {
+function stringify(exp: unknown, quote=true): string {
     if (exp === null) {
         return '()';
     } else if (exp === true) {
@@ -336,7 +318,7 @@ function c(name: string, arity: number, fun: IntrinsicBody,
 }
 
 // Return a list of symbols of the global environment.
-function globals(x: List) {
+function globals(_x: List) {
     let j: List = null;
     const env = GlobalEnv.next; // Skip the frame marker.
     if (env !== null)
@@ -345,7 +327,7 @@ function globals(x: List) {
     return j;
 }
  
-let G1 =
+const G1 =
     c('+', 2, x => add(fst(x) as Numeric, snd(x) as Numeric),
       c('-', 2, x => subtract(fst(x) as Numeric, snd(x) as Numeric),
         c('*', 2, x => multiply(fst(x) as Numeric, snd(x) as Numeric),
@@ -376,13 +358,13 @@ const GlobalEnv = new Environment(
                             runOnNextLoop(() => resolve(None));
                         });
                     },
-                      c('newline', 0, x => {
+                      c('newline', 0, _x => {
                           write('\n');
                           return new Promise(resolve => {
                               runOnNextLoop(() => resolve(None));
                           });
                       },
-                        c('read', 0, x => readExpression('', ''),
+                        c('read', 0, _x => readExpression('', ''),
                           c('eof-object?', 1, x => fst(x) === EOF,
                             c('symbol?', 1, x => fst(x) instanceof Sym,
                               new Environment(
@@ -492,7 +474,7 @@ async function evaluate(exp: unknown, env: Environment): Promise<unknown> {
                         k.push(ContOp.ConsArgs, null);
                         break Loop2;
                     }
-                case ContOp.ConsArgs:
+                case ContOp.ConsArgs: {
                     // x is a list of evaluated args (to be cdr);
                     // exp is a newly evaluated arg (to be car).
                     const args = new Cell(exp, x);
@@ -511,6 +493,7 @@ async function evaluate(exp: unknown, env: Environment): Promise<unknown> {
                         throw Error('invalid operation: ' + op2);
                     }
                     break;
+                }
                 case ContOp.RestoreEnv: // x is an Environment.
                     env = x as Environment;
                     break;
@@ -526,7 +509,7 @@ async function evaluate(exp: unknown, env: Environment): Promise<unknown> {
             throw ex;
         const ex2 = new Error(ex + '\n\t' + stringify(k));
         if (typeof ex === 'object' && ex !== null) {
-            const stack = ex.stack; // non-standard
+            const stack = (ex as any).stack; // .stack is not in the standards.
             if (stack !== undefined)
                 ex2.stack = ex2.message + stack;
         }
@@ -554,7 +537,7 @@ function applyFunction(fun: unknown, arg: List, k: Continuation,
             if (arg === null ? fun.arity > 0 : arg.length !== fun.arity)
                 throw Error('arity not matched: ' + fun + ' and ' +
                             stringify(arg));
-        let result = fun.fun(arg);
+        const result = fun.fun(arg);
         return [result, env];
     } else if (fun instanceof Closure) {
         k.pushRestoreEnv(env);
@@ -610,7 +593,7 @@ function readFromTokens(tokens: string[]): unknown {
     switch (token) {
     case undefined:
         throw new EOFException();
-    case '(':
+    case '(': {
         const z = new Cell(null, null);
         let y = z;
         while (tokens[0] !== ')') {
@@ -628,15 +611,20 @@ function readFromTokens(tokens: string[]): unknown {
         }
         tokens.shift();
         return z.cdr;
+    }
     case ')':
         throw SyntaxError('unexpected )');
-    case "'":
+    case "'": {
         const e = readFromTokens(tokens);
         return new Cell(QuoteSym, new Cell(e, null)); // 'e => (quote e)
+    }
     case '#f':
         return false;
     case '#t':
         return true;
+    case '+':                // N.B. BigInt('+') returns 0n in Safari.
+    case '-':
+        return Sym.interned(token);
     }
     if (token[0] === '"') {
         return token.substring(1);
@@ -663,58 +651,27 @@ async function load(fileName: string): Promise<unknown> {
 }
 
 let stdInTokens: string[] = []; // Tokens from the standard-in
-let oldTokens: string[] = [];
-type ReadState = [(a: any)=>void, (a: any)=>void, string, string];
-let readState: ReadState | undefined = undefined;
 
 // Read an expression from the standard-in asynchronously.
-function readExpression(prompt1: string, prompt2: string): unknown {
-    oldTokens = stdInTokens.slice();
-    try {
-        return readFromTokens(stdInTokens);
-    } catch (ex) {
-        if (ex instanceof EOFException) {
-            if (readState !== undefined)
-                throw Error('bad read state');
-            write(oldTokens.length === 0 ? prompt1 : prompt2);
-            return new Promise((resolve, reject) => {
-                readState = [resolve, reject, prompt1, prompt2];
-                // Continue into stdInOnData/stdInOnEnd.
-            });
-        } else {
-            stdInTokens = []; // Discard the erroneous tokens.
-            throw ex;
-        }
-    }
-}
-
-function stdInOnData(line: string): void {
-    const tokens = splitStringIntoTokens(line);
-    stdInTokens = oldTokens.concat(tokens);
-    oldTokens = stdInTokens.slice();
-    if (readState !== undefined) {
-        const [resolve, reject, prompt1, prompt2] = readState;
+async function readExpression(prompt1: string, prompt2: string):
+Promise<unknown> {
+    for (;;) {
+        const old = stdInTokens.slice();
         try {
-            resolve(readFromTokens(stdInTokens));
-            readState = undefined;
+            return readFromTokens(stdInTokens);
         } catch (ex) {
             if (ex instanceof EOFException) {
-                write(oldTokens.length === 0 ? prompt1 : prompt2);
-                // Continue into stdInOnData/stdInOnEnd.
+                write(old.length === 0 ? prompt1 : prompt2);
+                const line = await readLine();
+                if (line === null)
+                    return EOF;
+                const tokens = splitStringIntoTokens(line);
+                stdInTokens = old.concat(tokens);
             } else {
                 stdInTokens = []; // Discard the erroneous tokens.
-                reject(ex);
-                readState = undefined;
+                throw ex;
             }
         }
-    }
-}
-
-function stdInOnEnd(): void {
-    if (readState !== undefined) {
-        const [resolve, reject, prompt1, prompt2] = readState;
-        resolve(EOF);
-        readState = undefined;
     }
 }
 
@@ -737,36 +694,36 @@ async function readEvalPrintLoop(): Promise<void> {
 
 //----------------------------------------------------------------------
 
-// The main procedure etc. on Node.js
+// The main procedure on Deno
 
-declare function setImmediate(callback: () => void): void;
-if (typeof setImmediate !== 'undefined')
-    runOnNextLoop = setImmediate; // Use setImmediate if possible.
+declare let Deno: any;          // XXX to transpile with tsc.
+if (typeof Deno !== 'undefined') {
+    runOnNextLoop = queueMicrotask;
+    readStringFrom = Deno.readTextFileSync; // Requires allow-read permission.
+    
+    const encoder = new TextEncoder(); // to utf-8 bytes
+    write = (s: string) => {
+        const bb = encoder.encode(s);
+        Deno.writeAllSync(Deno.stdout, bb);
+    };
 
-declare var process: any;
-declare function require(name: string): any;
-if (typeof process !== 'undefined' && typeof require !== 'undefined') {
-    const fs = require('fs');
-    readStringFrom = (fileName: string) => fs.readFileSync(fileName, 'utf8');
-    write = (s: string) => process.stdout.write(s);
+    const decoder = new TextDecoder(); // from utf-8 bytes
+    const buf = new Uint8Array(8000);
+    readLine = async function(): Promise<string | null> {
+        const n = await Deno.stdin.read(buf) as (number | null);
+        if (n === null)
+            return null;        // End-Of-File
+        return decoder.decode(buf.subarray(0, n));
+    };
 
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', stdInOnData);
-    process.stdin.on('end', stdInOnEnd);
-
-    async function main() {
-        try {
-            if (process.argv.length > 2) {
-                await load(process.argv[2]);
-                if (process.argv[3] !== '-')
-                    process.exit(0);
-            }
-            await readEvalPrintLoop();
-        } catch (ex) {
-            console.log(ex);
-            process.exit(1);
+    const main = async function(): Promise<void> {
+        if (Deno.args.length > 0) {
+            await load(Deno.args[0]);
+            if (Deno.args[1] !== '-')
+                Deno.exit(0);
         }
-    }
+        await readEvalPrintLoop();
+    };
 
     main();
 }

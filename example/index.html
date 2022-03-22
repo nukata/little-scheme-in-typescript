@@ -57,6 +57,7 @@
   const ta = document.getElementById("text_area");
   let current_position = 0;
   let stop_flag = false;
+  let readLine_resolve;
 
   write = (s) => {
       if (stop_flag) {
@@ -67,10 +68,14 @@
       current_position = ta.value.length;
   }
 
+  readLine = () => new Promise((resolve, _reject) => {
+      readLine_resolve = resolve;
+  });
+
   ta.addEventListener("keyup", (event) => {
       if (event.key === "Enter") {
-          line = ta.value.substring(current_position);
-          stdInOnData(line);
+          let line = ta.value.substring(current_position);
+          readLine_resolve(line);
       }
   });
 
